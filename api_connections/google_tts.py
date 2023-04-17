@@ -1,18 +1,12 @@
-from google.cloud import texttospeech
+from google.cloud import speech as speech_v1p1beta1
 
-def synthesize_speech(text, language_code='en-US', voice_name='en-US-Wavenet-A'):
-    client = texttospeech.TextToSpeechClient()
-    input_text = texttospeech.SynthesisInput(text=text)
-    voice = texttospeech.VoiceSelectionParams(
+def transcribe_speech(audio_data, language_code='en-US'):
+    client = speech_v1p1beta1.SpeechClient()
+    config = speech_v1p1beta1.RecognitionConfig(
+        encoding=speech_v1p1beta1.RecognitionConfig.AudioEncoding.LINEAR16,
+        sample_rate_hertz=16000,
         language_code=language_code,
-        name=voice_name,
     )
-    audio_config = texttospeech.AudioConfig(
-        audio_encoding=texttospeech.AudioEncoding.MP3
-    )
+    response = client.recognize(config=config, audio=audio_data)
 
-    response = client.synthesize_speech(
-        input=input_text, voice=voice, audio_config=audio_config
-    )
-
-    return response.audio_content
+    return response.results[0].alternatives[0].transcript.strip()
