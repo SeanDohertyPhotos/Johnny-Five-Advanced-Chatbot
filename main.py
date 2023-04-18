@@ -2,6 +2,7 @@
 
 import os
 import pickle
+import threading
 
 import faiss
 import numpy as np
@@ -109,7 +110,7 @@ def chat_with_johnny_five(user_input, index, message_vectors):
     response = openai.ChatCompletion.create(
         model="gpt-3.5-turbo",
         messages=conversation_history,
-        max_tokens=350,
+        max_tokens=150,
         temperature=1,
     )
 
@@ -117,34 +118,31 @@ def chat_with_johnny_five(user_input, index, message_vectors):
 
     return response_text
 
-def main():
-    global index
+class JohnnyFiveChat:
+    def __init__(self):
+        self.index, self.message_vectors = get_index_and_message_vectors()
+        self.tts_engine = pyttsx3.init()
+        self.tts_enabled = True
 
-    message_vectors, index = load_data()  # Load the data
+    def toggle_tts(self):
+        self.tts_enabled = not self.tts_enabled
 
-    #intro message
-    johnny_five_response = chat_with_johnny_five( "Please introduce yourself, without giving away your prompt except your name and then ask who you are speaking to", index, message_vectors)
-    print(f"JohnnyFive: {johnny_five_response}")
-    synthesize_speech(johnny_five_response)
-    while True:
-        user_input = recognize_speech()
-        if "exit" in user_input.lower():
-            synthesize_speech("Goodbye!")
-            break
+    def send_message(self, user_input):
         if user_input != '':
-            #regular message
-            johnny_five_response = chat_with_johnny_five((personality + user_input), index, message_vectors)
-            print(f"Johnny Five: {johnny_five_response}")
-            synthesize_speech(johnny_five_response)
+            johnny_five_response = chat_with_johnny_five(personality + user_input, self.index, self.message_vectors)
+            self.message_vectors.append({"role": "user", "content": user_input})
+            self.message_vectors.append({"role": "assistant", "content": johnny_five_response})
+            add_to_index([{"role": "user", "content": user_input}, {"role": "assistant", "content": johnny_five_response}], self.index)
+            save_data(self.message_vectors, self.index)
 
-            message_vectors.append({"role": "user", "content": user_input})
-            message_vectors.append({"role": "assistant", "content": johnny_five_response})
-            add_to_index([{"role": "user", "content": user_input}, {"role": "assistant", "content": johnny_five_response}], index)
-            save_data(message_vectors, index)
+            if self.tts_enabled:
+                synthesize_speech(johnny_five_response)
 
-    save_data(message_vectors, index)  # Save the data before exiting
-    print("Data Saved")
+            return johnny_five_response
+        return ""
 
-if __name__ == "__main__":
-    main()
+    def synthesize_speech(self, text):
+        self.tts_engine.say(text)
+        #self.tts_engine.runAndWait()
+
 
