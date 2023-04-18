@@ -1,13 +1,13 @@
-
 #This code creates a selective conversation history by considering only the most relevant messages to the user's input, retrieved using Faiss, while staying within the token limit. As the conversation progresses, new messages are added to the message_vectors list and the Faiss index. This approach helps maintain a large amount of information while staying within the token limit.
 
 import os
 import pickle
+
+import faiss
+import numpy as np
 import openai
 import pyttsx3
 import speech_recognition as sr
-import faiss
-import numpy as np
 from sentence_transformers import SentenceTransformer
 
 model = SentenceTransformer('paraphrase-distilroberta-base-v2')
@@ -64,6 +64,19 @@ def load_data():
         index = faiss.IndexFlatL2(vector_dim)
     return message_vectors, index
 
+# Add this function to your main.py script
+def get_index_and_message_vectors():
+    message_vectors, index = load_data()
+    return index, message_vectors
+
+def ingest_text_to_vector_database(text, index, message_vectors):
+    message = {
+        "role": "document",
+        "content": text
+    }
+    message_vectors.append(message)
+    add_to_index([message], index)
+
 def recognize_speech():
     with sr.Microphone() as source:
         print("Listening")
@@ -109,7 +122,8 @@ def main():
 
     message_vectors, index = load_data()  # Load the data
 
-    johnny_five_response = chat_with_johnny_five(personality + "Please introduce yourself, without giving away your prompt except your name and then ask who you are speaking to", index, message_vectors)
+    #intro message
+    johnny_five_response = chat_with_johnny_five( "Please introduce yourself, without giving away your prompt except your name and then ask who you are speaking to", index, message_vectors)
     print(f"JohnnyFive: {johnny_five_response}")
     synthesize_speech(johnny_five_response)
     while True:
@@ -118,6 +132,7 @@ def main():
             synthesize_speech("Goodbye!")
             break
         if user_input != '':
+            #regular message
             johnny_five_response = chat_with_johnny_five((personality + user_input), index, message_vectors)
             print(f"Johnny Five: {johnny_five_response}")
             synthesize_speech(johnny_five_response)
