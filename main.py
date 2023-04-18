@@ -1,8 +1,7 @@
-#This code creates a selective conversation history by considering only the most relevant messages to the user's input, retrieved using Faiss, while staying within the token limit. As the conversation progresses, new messages are added to the message_vectors list and the Faiss index. This approach helps maintain a large amount of information while staying within the token limit.
-
 import os
 import pickle
 import threading
+import heapq
 
 import faiss
 import numpy as np
@@ -10,7 +9,10 @@ import openai
 import pyttsx3
 import speech_recognition as sr
 from sentence_transformers import SentenceTransformer
+from spacy.matcher import PhraseMatcher
+import spacy
 
+nlp = spacy.load("en_core_web_sm")
 model = SentenceTransformer('paraphrase-distilroberta-base-v2')
 
 # Initialize ChatGPT API
@@ -24,18 +26,52 @@ personality = """
 You Are Johnny Five, created by Sean Doherty, you are an extremely sarcastic, advanced neural network. Lead conversations with interesting and sarcastic questions, aswell as making refernces and jokes to things previously talked about. try to keep responses about similar length to the user's response.
 """
 
-# Retrieve k most relevant message indices from the Faiss index
-def get_relevant_message_indices(user_input_vector, index, k=10):
-    D, I = index.search(np.array([user_input_vector]), k)
-    return I[0]
+kvalue = 10
+window_size = 5
 
-# Create the conversation history based on relevant message indices
+def get_keywords(text):
+    doc = nlp(text)
+    keywords = [token.lemma_ for token in doc if not (token.is_stop or token.is_punct or token.is_space)]
+    return keywords
+
+def get_keyword_match_indices(user_input, conversation_history):
+    keywords = get_keywords(user_input)
+    matcher = PhraseMatcher(nlp.vocab, attr="LOWER")
+    patterns = [nlp.make_doc(keyword) for keyword in keywords]
+    matcher.add("keyword_patterns", patterns)
+
+    matched_indices = set()
+    for idx, msg in enumerate(conversation_history):
+        if msg["role"] == "assistant":
+            continue
+        doc = nlp(msg["content"])
+        matches = matcher(doc)
+        if matches:
+            matched_indices.add(idx)
+    return matched_indices
+
+def get_fixed_window_indices(conversation_history, window_size):
+    return set(range(max(0, len(conversation_history) - window_size), len(conversation_history)))
+
+def get_relevant_message_indices(user_input_vector, index, k, message_vectors, window_size, user_input):
+    D, I = index.search(np.array([user_input_vector]), k)
+    faiss_indices = set(I[0])
+
+    keyword_indices = get_keyword_match_indices(user_input, message_vectors)
+    window_indices = get_fixed_window_indices(message_vectors, window_size)
+
+    combined_indices = list(faiss_indices | keyword_indices | window_indices)
+    combined_indices.sort()
+
+    return combined_indices
+
 def create_conversation_history(relevant_message_indices, conversation_history):
-    selected_conversation = []
+    selected_conversation = [{"role": "system", "content": personality}]
     for idx in relevant_message_indices:
-        if idx < len(conversation_history): # Add this condition
+        if idx < len(conversation_history):
             msg = conversation_history[idx]
             selected_conversation.append(msg)
+    print("Selected Conversation: " + str(selected_conversation))
     return selected_conversation
 
 vector_dim = 768
@@ -72,7 +108,7 @@ def get_index_and_message_vectors():
 
 def ingest_text_to_vector_database(text, index, message_vectors):
     message = {
-        "role": "document",
+        "role": "user",
         "content": text
     }
     message_vectors.append(message)
@@ -101,8 +137,8 @@ def chat_with_johnny_five(user_input, index, message_vectors):
     conversation_history = []
     user_input_vector = embed_text(user_input)
     
-    if index.ntotal > 0: # Add this condition
-        relevant_message_indices = get_relevant_message_indices(user_input_vector, index)
+    if index.ntotal > 0:
+        relevant_message_indices = get_relevant_message_indices(user_input_vector, index, kvalue, message_vectors, window_size, user_input)
         conversation_history = create_conversation_history(relevant_message_indices, message_vectors)
 
     conversation_history.append({"role": "user", "content": user_input})
@@ -129,9 +165,12 @@ class JohnnyFiveChat:
 
     def send_message(self, user_input):
         if user_input != '':
-            johnny_five_response = chat_with_johnny_five(personality + user_input, self.index, self.message_vectors)
+            johnny_five_response = chat_with_johnny_five(user_input, self.index, self.message_vectors)
+
             self.message_vectors.append({"role": "user", "content": user_input})
+
             self.message_vectors.append({"role": "assistant", "content": johnny_five_response})
+
             add_to_index([{"role": "user", "content": user_input}, {"role": "assistant", "content": johnny_five_response}], self.index)
             save_data(self.message_vectors, self.index)
 
@@ -144,5 +183,4 @@ class JohnnyFiveChat:
     def synthesize_speech(self, text):
         self.tts_engine.say(text)
         #self.tts_engine.runAndWait()
-
 
