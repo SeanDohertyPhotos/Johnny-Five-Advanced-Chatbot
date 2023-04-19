@@ -174,8 +174,8 @@ class JohnnyFiveChat:
             add_to_index([{"role": "user", "content": user_input}, {"role": "assistant", "content": johnny_five_response}], self.index)
             save_data(self.message_vectors, self.index)
 
-            if self.tts_enabled:
-                synthesize_speech(johnny_five_response)
+            #if self.tts_enabled:
+                #synthesize_speech(johnny_five_response)
 
             return johnny_five_response
         return ""
