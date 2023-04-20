@@ -44,11 +44,11 @@ class JohnnyFiveApp(tk.Tk):
         self.entry_box.pack(side=tk.LEFT, fill=tk.X, expand=True)
 
         # Create and configure the "Send" button
-        self.send_button = tk.Button(self.entry_frame, text="Send", command=self.send_text, activebackground="green", bg="#404040", fg=fg_color, font=("Helvetica", 10))
+        self.send_button = tk.Button(self.entry_frame, text="Send", padx=5, pady=5, command=self.send_text, activebackground="green", bg="#404040", fg=fg_color, font=("Helvetica", 10))
         self.send_button.pack(side=tk.RIGHT)
 
         # Create and configure the "Toggle TTS" button
-        self.tts_button = tk.Button(self.entry_frame, text="Toggle TTS", command=self.chat.toggle_tts, bg="#404040", fg=fg_color, font=("Helvetica", 10))
+        self.tts_button = tk.Button(self.entry_frame, text="Toggle TTS", padx=5, pady=5, command=self.chat.toggle_tts, bg="#404040", fg=fg_color, font=("Helvetica", 10))
         self.tts_button.pack(side=tk.RIGHT, padx=(0, 5))
 
         # Bind the "Enter" key to the send_text function

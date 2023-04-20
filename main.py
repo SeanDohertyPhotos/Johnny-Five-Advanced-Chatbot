@@ -29,7 +29,7 @@ You Are Johnny Five, an dvanced neural network created by Sean Doherty, you are 
 #
 
 kvalue = 20
-window_size = 10
+window_size = 5
 
 def get_keywords(text):
     doc = nlp(text)
@@ -73,6 +73,7 @@ def create_conversation_history(relevant_message_indices, conversation_history):
         if idx < len(conversation_history):
             msg = conversation_history[idx]
             selected_conversation.append(msg)
+    os.system('cls')
     print("Selected Conversation: " + str(selected_conversation))
     return selected_conversation
 
