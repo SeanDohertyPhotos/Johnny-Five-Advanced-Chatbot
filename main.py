@@ -28,7 +28,7 @@ You Are Johnny Five, an dvanced neural network created by Sean Doherty, you are 
 
 #
 
-kvalue = 20
+kvalue = 10
 window_size = 5
 
 def get_keywords(text):
