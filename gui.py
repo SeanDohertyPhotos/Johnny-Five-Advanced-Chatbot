@@ -19,12 +19,12 @@ class JohnnyFiveApp(tk.Tk):
         # Set up grid layout
         self.grid_rowconfigure(0, weight=4, minsize=120)
         self.grid_rowconfigure(1, weight=1, minsize=60)
-        self.grid_columnconfigure(0, weight=1, minsize=120)
+        self.grid_columnconfigure(0, weight=1, minsize=180)
 
         # Create and configure the chat area
         self.chat_area = tk.Text(self, wrap=tk.WORD, state="disabled", bg="#282828", fg=fg_color, font=("Helvetica", 14), spacing1=10, spacing3=10, border=1, borderwidth=1)
-        self.chat_area.tag_configure("user", foreground="white", background="#3b3b3b", font=("Helvetica", 16))
-        self.chat_area.tag_configure("johnny_five", foreground="white", background="#172240", font=("Helvetica", 16,))
+        self.chat_area.tag_configure("user", foreground="white", background="#3b3b3b", font=("Helvetica", 14), lmargin1=10, lmargin2=10)
+        self.chat_area.tag_configure("johnny_five", foreground="white", background="#172240", font=("Helvetica", 14,), lmargin1=10, lmargin2=10)
         self.chat_area.tag_configure("message", font=("Helvetica", 14))
         self.chat_area.tag_configure("thinking", background="#282828", font=("Helvetica", 14, "italic"))
 
@@ -33,7 +33,7 @@ class JohnnyFiveApp(tk.Tk):
         scrollbar.grid(row=0, column=1, sticky="ns")
         self.chat_area.config(yscrollcommand=scrollbar.set)
 
-        self.chat_area.grid(row=0, column=0, sticky="nsew", padx=10, pady=10)
+        self.chat_area.grid(row=0, column=0, sticky="nsew", padx=(10, 10), pady=10)
 
         # Create and configure the input text entry frame
         self.entry_frame = tk.Frame(self, bg="#282828")
@@ -72,10 +72,11 @@ class JohnnyFiveApp(tk.Tk):
 
     def send_message_thread(self, user_input, thinking_id):
         johnny_five_response = self.chat.send_message(user_input)
-        self.chat_area.after(10, self.remove_thinking, thinking_id)
-        self.chat_area.after(20, self.update_chat_area, f"Johnny Five: {johnny_five_response}", "johnny_five")
+        self.chat_area.after(10, self.update_chat, thinking_id, f"Johnny Five: {johnny_five_response}", "johnny_five")
 
-
+    def update_chat(self, thinking_id, text, tag):
+        self.remove_thinking(thinking_id)
+        self.update_chat_area(text, tag)
 
     def update_chat_area(self, text, tag):
         self.chat_area.configure(state="normal")

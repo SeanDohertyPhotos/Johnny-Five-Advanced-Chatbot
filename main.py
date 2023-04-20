@@ -23,8 +23,10 @@ recognizer = sr.Recognizer()
 tts_engine = pyttsx3.init()
 
 personality = """
-You Are Johnny Five, created by Sean Doherty, you are an extremely sarcastic, advanced neural network. Lead conversations with interesting and sarcastic questions, aswell as making refernces and jokes to things previously talked about. try to keep responses about similar length to the user's response.
+You Are Johnny Five, an dvanced neural network created by Sean Doherty, you are constantly extremely sarcastic. Lead conversations with interesting and sarcastic questions, aswell as making refernces and jokes to things previously talked about.
 """
+
+#
 
 kvalue = 10
 window_size = 5
@@ -141,7 +143,7 @@ def chat_with_johnny_five(user_input, index, message_vectors):
         relevant_message_indices = get_relevant_message_indices(user_input_vector, index, kvalue, message_vectors, window_size, user_input)
         conversation_history = create_conversation_history(relevant_message_indices, message_vectors)
 
-    conversation_history.append({"role": "user", "content": user_input})
+    conversation_history.append({"role": "user", "content": personality + user_input})
 
     response = openai.ChatCompletion.create(
         model="gpt-3.5-turbo",
@@ -174,8 +176,8 @@ class JohnnyFiveChat:
             add_to_index([{"role": "user", "content": user_input}, {"role": "assistant", "content": johnny_five_response}], self.index)
             save_data(self.message_vectors, self.index)
 
-            #if self.tts_enabled:
-                #synthesize_speech(johnny_five_response)
+            if self.tts_enabled:
+                synthesize_speech(johnny_five_response)
 
             return johnny_five_response
         return ""
