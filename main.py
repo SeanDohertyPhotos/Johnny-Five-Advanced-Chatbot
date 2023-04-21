@@ -12,6 +12,22 @@ from sentence_transformers import SentenceTransformer
 from spacy.matcher import PhraseMatcher
 import spacy
 
+#zapier stuff
+from langchain.llms import OpenAI
+from langchain.agents import initialize_agent
+from langchain.agents.agent_toolkits import ZapierToolkit
+from langchain.utilities.zapier import ZapierNLAWrapper
+import os
+
+os.environ["OPENAI_API_KEY"] = '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'
+os.environ["ZAPIER_NLA_API_KEY"] = 'sk-ak-ayWnXAkLOVkYYJ9rR8uykncNCN'
+llm = OpenAI(temperature=0)
+zapier = ZapierNLAWrapper()
+toolkit = ZapierToolkit.from_zapier_nla_wrapper(zapier)
+agent = initialize_agent(toolkit.get_tools(), llm, agent="zero-shot-react-description", verbose=True)
+
+
+
 nlp = spacy.load("en_core_web_sm")
 model = SentenceTransformer('paraphrase-distilroberta-base-v2')
 
@@ -28,7 +44,7 @@ You Are Johnny Five, an dvanced neural network created by Sean Doherty, you are 
 
 #
 
-kvalue = 10
+kvalue = 5
 window_size = 5
 
 def get_keywords(text):
@@ -74,7 +90,7 @@ def create_conversation_history(relevant_message_indices, conversation_history):
             msg = conversation_history[idx]
             selected_conversation.append(msg)
     os.system('cls')
-    print("Selected Conversation: " + str(selected_conversation))
+    #print("Selected Conversation: " + str(selected_conversation))
     return selected_conversation
 
 vector_dim = 768
@@ -167,20 +183,37 @@ class JohnnyFiveChat:
         self.tts_enabled = not self.tts_enabled
 
     def send_message(self, user_input):
-        if user_input != '':
+        if user_input == 'zapiertools':
+            for tool in toolkit.get_tools():
+                print (tool.name)
+                print (tool.description)
+                print ("\n\n")
+                self.message_vectors.append({"role": "user", "content": "You can use this zapiertool tool by giving a command starting with ZapierAgent:" + tool.name})
+                save_data(self.message_vectors, self.index)
+        
+        elif user_input != '':
             johnny_five_response = chat_with_johnny_five(user_input, self.index, self.message_vectors)
-
             self.message_vectors.append({"role": "user", "content": user_input})
-
             self.message_vectors.append({"role": "assistant", "content": johnny_five_response})
-
             add_to_index([{"role": "user", "content": user_input}, {"role": "assistant", "content": johnny_five_response}], self.index)
             save_data(self.message_vectors, self.index)
+
+            if 'ZapierAgent:' in johnny_five_response:
+                # initializing substrings
+                sub1 = "ZapierAgent:"
+                sub2 = ")"
+                                
+                # getting index of substrings
+                idx1 = johnny_five_response.find(sub1)
+                idx2 = johnny_five_response.find(sub2)
+                command = johnny_five_response[idx1 - len(sub1): idx2 + 1]
+                print("\n Command sent: " + str(command)+ "\n")
+                agent.run(command)
 
             if self.tts_enabled:
                 synthesize_speech(johnny_five_response)
 
-            return johnny_five_response
+            return johnny_five_response 
         return ""
 
     def synthesize_speech(self, text):
