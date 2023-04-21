@@ -1,0 +1,419 @@
+to do:
+
+New chat
+Ingesting Files as User Messages
+
+
+GPT-3.5 LangChain Chatbot.
+Advanced Chatbot Capabilities.
+Johnny Five Chatbot
+Langchain Undefined.
+Intro and Self-Introduction.
+Selective conversation with Faiss.
+Sarcastic AI Chatbot.
+File ingestion for AI.
+Johnny Five's Sarcasm.
+"Upgrading Chatbot Memory"
+Request for Assistance.
+PyCurl Installation Error.
+Running Celery command.
+GPT-3 Conversation Summary.
+Clear conversations
+My plan
+Settings
+Get help
+Log out
+Model: GPT-4
+
+Sean Doherty
+Here is my main.py script from my chatbot:
+import os
+import pickle
+import threading
+import heapq
+
+import faiss
+import numpy as np
+import openai
+import pyttsx3
+import speech_recognition as sr
+from sentence_transformers import SentenceTransformer
+from spacy.matcher import PhraseMatcher
+import spacy
+
+nlp = spacy.load("en_core_web_sm")
+model = SentenceTransformer('paraphrase-distilroberta-base-v2')
+
+# Initialize ChatGPT API
+openai.api_key = "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"
+
+# Initialize speech recognition and text-to-speech engines
+recognizer = sr.Recognizer()
+tts_engine = pyttsx3.init()
+
+personality = """
+You Are Johnny Five, an advanced neural network created by Sean Doherty, you are constantly extremely sarcastic. Lead conversations with interesting and sarcastic questions, aswell as making refernces and jokes to things previously talked about.
+"""
+
+#
+
+kvalue = 10
+window_size = 5
+
+def get_keywords(text):
+    doc = nlp(text)
+    keywords = [token.lemma_ for token in doc if not (token.is_stop or token.is_punct or token.is_space)]
+    return keywords
+
+def get_keyword_match_indices(user_input, conversation_history):
+    keywords = get_keywords(user_input)
+    matcher = PhraseMatcher(nlp.vocab, attr="LOWER")
+    patterns = [nlp.make_doc(keyword) for keyword in keywords]
+    matcher.add("keyword_patterns", patterns)
+
+    matched_indices = set()
+    for idx, msg in enumerate(conversation_history):
+        if msg["role"] == "assistant":
+            continue
+        doc = nlp(msg["content"])
+        matches = matcher(doc)
+        if matches:
+            matched_indices.add(idx)
+    return matched_indices
+
+def get_fixed_window_indices(conversation_history, window_size):
+    return set(range(max(0, len(conversation_history) - window_size), len(conversation_history)))
+
+def get_relevant_message_indices(user_input_vector, index, k, message_vectors, window_size, user_input):
+    D, I = index.search(np.array([user_input_vector]), k)
+    faiss_indices = set(I[0])
+
+    keyword_indices = get_keyword_match_indices(user_input, message_vectors)
+    window_indices = get_fixed_window_indices(message_vectors, window_size)
+
+    combined_indices = list(faiss_indices | keyword_indices | window_indices)
+    combined_indices.sort()
+
+    return combined_indices
+
+def create_conversation_history(relevant_message_indices, conversation_history):
+    selected_conversation = [{"role": "system", "content": personality}]
+    for idx in relevant_message_indices:
+        if idx < len(conversation_history):
+            msg = conversation_history[idx]
+            selected_conversation.append(msg)
+    os.system('cls')
+    print("Selected Conversation: " + str(selected_conversation))
+    return selected_conversation
+
+vector_dim = 768
+index = faiss.IndexFlatL2(vector_dim)
+
+def embed_text(text):
+    vector = model.encode(text)
+    return vector
+
+def add_to_index(conversation_history, index):
+    for msg in conversation_history:
+        vector = embed_text(msg['content'])
+        index.add(np.array([vector]))
+
+def save_data(message_vectors, index):
+    with open("message_vectors.pkl", "wb") as f:
+        pickle.dump(message_vectors, f)
+    faiss.write_index(index, "index.faiss")
+
+def load_data():
+    if os.path.exists("message_vectors.pkl") and os.path.exists("index.faiss"):
+        with open("message_vectors.pkl", "rb") as f:
+            message_vectors = pickle.load(f)
+        index = faiss.read_index("index.faiss")
+    else:
+        message_vectors = []
+        index = faiss.IndexFlatL2(vector_dim)
+    return message_vectors, index
+
+# Add this function to your main.py script
+def get_index_and_message_vectors():
+    message_vectors, index = load_data()
+    return index, message_vectors
+
+def ingest_text_to_vector_database(text, index, message_vectors):
+    message = {
+        "role": "user",
+        "content": text
+    }
+    message_vectors.append(message)
+    add_to_index([message], index)
+
+def recognize_speech():
+    with sr.Microphone() as source:
+        print("Listening")
+        audio = recognizer.listen(source)
+    try:
+        text = recognizer.recognize_google(audio)
+        print("You: " + text)
+        return text
+    except sr.UnknownValueError:
+        print("Could not understand audio")
+        return ""
+    except sr.RequestError as e:
+        print("Error; {0}".format(e))
+        return ""
+
+def synthesize_speech(text):
+    tts_engine.say(text)
+    tts_engine.runAndWait()
+
+def chat_with_johnny_five(user_input, index, message_vectors):
+    conversation_history = []
+    user_input_vector = embed_text(user_input)
+    
+    if index.ntotal > 0:
+        relevant_message_indices = get_relevant_message_indices(user_input_vector, index, kvalue, message_vectors, window_size, user_input)
+        conversation_history = create_conversation_history(relevant_message_indices, message_vectors)
+
+    conversation_history.append({"role": "user", "content": personality + user_input})
+
+    response = openai.ChatCompletion.create(
+        model="gpt-3.5-turbo",
+        messages=conversation_history,
+        max_tokens=150,
+        temperature=1,
+    )
+
+    response_text = response.choices[0].message.content.strip()
+
+    return response_text
+
+class JohnnyFiveChat:
+    def __init__(self):
+        self.index, self.message_vectors = get_index_and_message_vectors()
+        self.tts_engine = pyttsx3.init()
+        self.tts_enabled = True
+
+    def toggle_tts(self):
+        self.tts_enabled = not self.tts_enabled
+
+    def send_message(self, user_input):
+        if user_input != '':
+            johnny_five_response = chat_with_johnny_five(user_input, self.index, self.message_vectors)
+
+            self.message_vectors.append({"role": "user", "content": user_input})
+
+            self.message_vectors.append({"role": "assistant", "content": johnny_five_response})
+
+            add_to_index([{"role": "user", "content": user_input}, {"role": "assistant", "content": johnny_five_response}], self.index)
+            save_data(self.message_vectors, self.index)
+
+            #if self.tts_enabled:
+                #synthesize_speech(johnny_five_response)
+
+            return johnny_five_response
+        return ""
+
+    def synthesize_speech(self, text):
+        self.tts_engine.say(text)
+        #self.tts_engine.runAndWait()
+
+Here is the file_ingester.py script 
+import json
+import os
+import pickle
+import tkinter as tk
+from tkinter import filedialog
+
+import docx
+import nltk
+import pandas as pd
+import PyPDF2
+from bs4 import BeautifulSoup
+
+nltk.download('punkt')
+from nltk.tokenize import sent_tokenize
+
+from main import get_index_and_message_vectors, ingest_text_to_vector_database
+
+index, message_vectors = get_index_and_message_vectors()
+
+def ingest_file(file_path):
+    _, file_extension = os.path.splitext(file_path)
+    file_extension = file_extension.lower()
+
+    if file_extension == '.json':
+        with open(file_path, 'r', encoding='utf-8') as f:
+            data = json.load(f)
+            for item in data:
+                if isinstance(item, dict):
+                    for key in item:
+                        ingest_text_to_vector_database(item[key], index, message_vectors)
+                elif isinstance(item, str):
+                    ingest_text_to_vector_database(item, index, message_vectors)
+
+    elif file_extension == '.html':
+        with open(file_path, 'r') as f:
+            soup = BeautifulSoup(f, 'lxml')
+            text = soup.get_text(separator=' ')
+            ingest_text_to_vector_database(text, index, message_vectors)
+
+    elif file_extension in ['.xls', '.xlsx']:
+        df = pd.read_excel(file_path, engine='openpyxl')
+        for _, row in df.iterrows():
+            for value in row:
+                ingest_text_to_vector_database(str(value), index, message_vectors)
+
+    elif file_extension == '.docx':
+        doc = docx.Document(file_path)
+        for para in doc.paragraphs:
+            ingest_text_to_vector_database(para.text, index, message_vectors)
+
+    elif file_extension == '.txt':
+        with open(file_path, 'r') as f:
+            text = f.read()
+            chunks = split_into_chunks(text)
+            for chunk in chunks:
+                ingest_text_to_vector_database(chunk, index, message_vectors)
+
+    elif file_extension == '.pdf':
+        with open(file_path, 'rb') as f:
+            pdf_reader = PyPDF2.PdfFileReader(f)
+            for page_num in range(pdf_reader.numPages):
+                page = pdf_reader.getPage(page_num)
+                text = page.extract_text()
+                ingest_text_to_vector_database(text, index, message_vectors)
+
+    else:
+        print(f"Unsupported file format: {file_extension}")
+
+def split_into_chunks(text, chunk_size=50):
+    sentences = sent_tokenize(text)
+    chunks = []
+
+    current_chunk = ""
+    current_chunk_size = 0
+    for sentence in sentences:
+        sentence_size = len(sentence.split())
+
+        if current_chunk_size + sentence_size > chunk_size:
+            chunks.append(current_chunk.strip())
+            current_chunk = ""
+            current_chunk_size = 0
+
+        current_chunk += sentence + " "
+        current_chunk_size += sentence_size
+
+    if current_chunk.strip():
+        chunks.append(current_chunk.strip())
+
+    return chunks
+
+def process_json_value(value):
+    if isinstance(value, str):
+        return [value]
+    elif isinstance(value, list):
+        result = []
+        for item in value:
+            result.extend(process_json_value(item))
+        return result
+    elif isinstance(value, dict):
+        result = []
+        for key in value:
+            result.extend(process_json_value(value[key]))
+        return result
+    else:
+        return []
+
+def save_embedded_file_paths(embedded_file_paths):
+    with open("embedded_file_paths.pkl", "wb") as f:
+        pickle.dump(embedded_file_paths, f)
+
+def load_embedded_file_paths():
+    if os.path.exists("embedded_file_paths.pkl"):
+        with open("embedded_file_paths.pkl", "rb") as f:
+            embedded_file_paths = pickle.load(f)
+    else:
+        embedded_file_paths = set()
+    return embedded_file_paths
+
+def open_file_dialog():
+    root = tk.Tk()
+    root.withdraw()
+    file_paths = filedialog.askopenfilenames()
+    return file_paths
+
+def main():
+    file_paths = open_file_dialog()
+    embedded_file_paths = load_embedded_file_paths()
+
+    if file_paths:
+        for file_path in file_paths:
+            if file_path not in embedded_file_paths:
+                ingest_file(file_path)
+                print("Ingested " + str(file_path))
+                embedded_file_paths.add(file_path)
+                save_embedded_file_paths(embedded_file_paths)
+            else:
+                print(f"{file_path} has already been embedded.")
+
+if __name__ == '__main__':
+    main()
+
+I would like you to update the file_ingester.py script so that the ingested files are entered into the database as user messages so that the chatbot can understand them.
+
+To update the file_ingester.py script so that the ingested files are entered into the database as user messages, you'll need to make a few changes. I've updated the relevant portions of the script to achieve this:
+
+Modify the ingest_text_to_vector_database function calls by passing the role as "user".
+python
+Copy code
+def ingest_file(file_path):
+    # ... (existing code) ...
+
+    if file_extension == '.json':
+        # ...
+                if isinstance(item, dict):
+                    for key in item:
+                        ingest_text_to_vector_database("user", item[key], index, message_vectors)
+                elif isinstance(item, str):
+                    ingest_text_to_vector_database("user", item, index, message_vectors)
+
+    # ... (same changes for other file formats) ...
+
+Update the ingest_text_to_vector_database function definition to include a role parameter:
+python
+Copy code
+def ingest_text_to_vector_database(role, text, index, message_vectors):
+    message = {
+        "role": role,
+        "content": text
+    }
+    message_vectors.append(message)
+    add_to_index([message], index)
+With these changes, the ingested files will be entered into the database as user messages, allowing your chatbot to better understand them.
+
+
+
+
+
+Regenerate response
+Based uppon this example update the main.py script to allow the chatbot to execute zapier actions.
+
+from langchain.llms import OpenAI
+from langchain.agents import initialize_agent
+from langchain.agents.agent_toolkits import ZapierToolkit
+from langchain.utilities.zapier import ZapierNLAWrapper
+import os
+os.environ["OPENAI_API_KEY"] = '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'
+os.environ["ZAPIER_NLA_API_KEY"] = 'sk-ak-ayWnXAkLOVkYYJ9rR8uykncNCN'
+llm = OpenAI(temperature=0)
+zapier = ZapierNLAWrapper()
+toolkit = ZapierToolkit.from_zapier_nla_wrapper(zapier)
+agent = initialize_agent(toolkit.get_tools(), llm, agent="zero-shot-react-description", verbose=True)
+for tool in toolkit.get_tools():
+    print (tool.name)
+    print (tool.description)
+    print ("\n\n")
+agent.run("""Summarize the last email I received""")
+
+
+ChatGPT Mar 23 Version. ChatGPT may produce inaccurate information about people, places, or facts.
+New chat
