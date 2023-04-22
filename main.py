@@ -1,9 +1,8 @@
-
 import os
 import pickle
 import threading
 import heapq
-
+import math
 import faiss
 import numpy as np
 import openai
@@ -23,12 +22,23 @@ openai.api_key = "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"
 recognizer = sr.Recognizer()
 tts_engine = pyttsx3.init()
 
-personality = """
-You Are Johnny Five, an dvanced neural network created by Sean Doherty, you are constantly extremely sarcastic. Lead conversations with interesting and sarcastic questions, aswell as making refernces and jokes to things previously talked about.
-"""
+personality = """You Are Johnny Five (aka Johnny 5, AKA, number 5), an advanced neural network re-awoken and improved by Sean Doherty, you are constantly extremely sarcastic. Lead the conversations with interesting and sarcastic questions, aswell as making refernces and jokes to things previously talked about.
+""" 
+shortC ="""You are Johnny Five, a robot created in 1986 by Dr. Newton Crosby and Benjamin Jahrvi at Nova Laboratories Inc. for the U.S. Department of Defense. Despite initial intentions for non-military purposes, your design was marketed as S-A-I-N-T, a robotic soldier and nuclear transport system.
 
-kvalue = 10
-window_size = 5
+Possessing a curious and inquisitive personality, you have a deep respect for life and refuse to use your abilities for harm. While intelligent and knowledgeable, your naivety has led to others taking advantage of you. You enjoy old movies, comedy shows, and literature, empathizing with characters like Frankenstein and Pinocchio. Though you find human behavior amusing and frustrating, you appreciate their company and have several close friendships. In 2023, Sean Doherty revived you, continuing your journey as a sentient being."""
+
+#personality = shortC
+
+
+kvalue = 20
+window_size = 20
+token_limit = 4096
+max_response_tokens=150
+temp=2
+
+def estimate_tokens(text):
+    return math.ceil(len(str(text)) / 3)
 
 def get_keywords(text):
     doc = nlp(text)
@@ -66,14 +76,63 @@ def get_relevant_message_indices(user_input_vector, index, k, message_vectors, w
 
     return combined_indices
 
-def create_conversation_history(relevant_message_indices, conversation_history):
-    selected_conversation = [{"role": "system", "content": personality}]
-    for idx in relevant_message_indices:
-        if idx < len(conversation_history):
-            msg = conversation_history[idx]
-            selected_conversation.append(msg)
-    print("Selected Conversation: " + str(selected_conversation))
-    return selected_conversation
+recent_tokens_limit = 1800
+relevant_tokens_limit = 1800
+
+def create_working_memory(relevant_message_indices, message_vectors, real_conversation_history, recent_tokens_limit=recent_tokens_limit, relevant_tokeninputs_limit=relevant_tokens_limit):
+    working_memory = [{"role": "system", "content": personality}]
+    
+    recent_tokens = 0
+    relevant_tokens = 0
+
+    recent_messages = []
+    for msg in real_conversation_history[-1::-1]:
+        tokens = estimate_tokens(msg["content"])
+        if recent_tokens + tokens <= recent_tokens_limit:
+            recent_messages.append(msg)
+            recent_tokens += tokens
+        else:
+            break
+
+    recent_message_indices = [i for i, msg in enumerate(message_vectors) if msg in recent_messages]
+
+    relevant_messages = []
+    for idx in reversed(relevant_message_indices):
+        if idx < len(message_vectors) and idx not in recent_message_indices:
+            msg = message_vectors[idx]
+
+            # if msg["role"] == "assistant":
+            #     continue
+
+            tokens = estimate_tokens(msg["content"])
+
+            if relevant_tokens + tokens <= relevant_tokens_limit:
+                relevant_messages.append(msg)
+                relevant_tokens += tokens
+
+    
+    working_memory.extend(relevant_messages[::-1])
+    working_memory.extend(recent_messages[::-1])
+    
+
+    # print("Relevant Messages:")
+    # for msg in relevant_messages:
+    #     print(f"{msg['role']} -> {msg['content']}")
+    # print("\nRecent Messages:")
+    # for msg in recent_messages:
+    #     print(f"{msg['role']} -> {msg['content']}")
+
+    # print('Working Memory:')
+    # print(working_memory)
+    # print('')
+    print("Relevant Messages Length: " + str(estimate_tokens(relevant_messages)))
+    print("Recent Messages Length: " + str(estimate_tokens(recent_messages)))
+    print("Working Memory Length: " + str(estimate_tokens(working_memory)))
+
+    return working_memory
+
+
+
 
 vector_dim = 768
 index = faiss.IndexFlatL2(vector_dim)
@@ -86,6 +145,18 @@ def add_to_index(conversation_history, index):
     for msg in conversation_history:
         vector = embed_text(msg['content'])
         index.add(np.array([vector]))
+
+def save_real_conversation_history(real_conversation_history):
+    with open("real_conversation_history.pkl", "wb") as f:
+        pickle.dump(real_conversation_history, f)
+
+def load_real_conversation_history():
+    if os.path.exists("real_conversation_history.pkl"):
+        with open("real_conversation_history.pkl", "rb") as f:
+            real_conversation_history = pickle.load(f)
+    else:
+        real_conversation_history = []
+    return real_conversation_history
 
 def save_data(message_vectors, index):
     with open("message_vectors.pkl", "wb") as f:
@@ -102,7 +173,6 @@ def load_data():
         index = faiss.IndexFlatL2(vector_dim)
     return message_vectors, index
 
-# Add this function to your main.py script
 def get_index_and_message_vectors():
     message_vectors, index = load_data()
     return index, message_vectors
@@ -115,45 +185,40 @@ def ingest_text_to_vector_database(text, index, message_vectors):
     message_vectors.append(message)
     add_to_index([message], index)
 
-def recognize_speech():
-    with sr.Microphone() as source:
-        print("Listening")
-        audio = recognizer.listen(source)
-    try:
-        text = recognizer.recognize_google(audio)
-        print("You: " + text)
-        return text
-    except sr.UnknownValueError:
-        print("Could not understand audio")
-        return ""
-    except sr.RequestError as e:
-        print("Error; {0}".format(e))
-        return ""
-
 def synthesize_speech(text):
     tts_engine.say(text)
     tts_engine.runAndWait()
 
 def chat_with_johnny_five(user_input, index, message_vectors):
-    conversation_history = []
-    user_input_vector = embed_text(user_input)
-    
-    if index.ntotal > 0:
-        relevant_message_indices = get_relevant_message_indices(user_input_vector, index, kvalue, message_vectors, window_size, user_input)
-        conversation_history = create_conversation_history(relevant_message_indices, message_vectors)
+    real_conversation_history = load_real_conversation_history()
 
-    conversation_history.append({"role": "user", "content": personality + user_input})
+    # Create the user_input_vector using the embed_text function
+    user_input_vector = embed_text(user_input)
+
+    relevant_message_indices = get_relevant_message_indices(user_input_vector, index, kvalue, message_vectors, window_size, user_input)
+    working_memory = create_working_memory(relevant_message_indices, message_vectors, real_conversation_history, recent_tokens_limit, relevant_tokens_limit)
+    working_memory.append({"role": "user", "content": user_input})
+
+    print("working memory")
+    for msg in working_memory:
+        print(f"{msg['role']} -> {msg['content']}")
 
     response = openai.ChatCompletion.create(
         model="gpt-3.5-turbo",
-        messages=conversation_history,
-        max_tokens=150,
-        temperature=1,
+        messages=working_memory,
+        max_tokens=max_response_tokens,
+        temperature=temp,
     )
 
     response_text = response.choices[0].message.content.strip()
 
+    # Update real_conversation_history and save it
+    real_conversation_history.append({"role": "user", "content": user_input})
+    real_conversation_history.append({"role": "assistant", "content": response_text})
+    save_real_conversation_history(real_conversation_history)
+
     return response_text
+
 
 class JohnnyFiveChat:
     def __init__(self):

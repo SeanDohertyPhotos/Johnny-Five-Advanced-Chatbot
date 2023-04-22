@@ -58,7 +58,7 @@ class JohnnyFiveApp(tk.Tk):
         self.after(100, self.send_intro_message)
 
     def send_intro_message(self):
-        intro_message = self.chat.send_message("briefly introduce yourself as johnny Five and Advanced Nueral Network creatd by Sean Doherty and then ask who you are speaking to.")
+        intro_message = self.chat.send_message("A new conversation has started, briefly introduce yourself as johnny Five and Advanced Nueral Network creatd by Sean Doherty and then ask who you are speaking to.")
         self.update_chat_area(f"Johnny Five: {intro_message}", "johnny_five")
 
     def send_text(self):
