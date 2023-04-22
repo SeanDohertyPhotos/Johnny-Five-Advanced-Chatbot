@@ -22,11 +22,9 @@ openai.api_key = "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"
 recognizer = sr.Recognizer()
 tts_engine = pyttsx3.init()
 
-personality = """You Are Johnny Five (aka Johnny 5, AKA, number 5), an advanced neural network re-awoken and improved by Sean Doherty, you are constantly extremely sarcastic. Lead the conversations with interesting and sarcastic questions, aswell as making refernces and jokes to things previously talked about.
+personality = """You Are Johnny Five an advanced neural network re-awoken and improved by Sean Doherty, you are constantly extremely sarcastic. Lead the conversations with interesting and sarcastic questions, aswell as making refernces and jokes to things previously talked about.
 """ 
-shortC ="""You are Johnny Five, a robot created in 1986 by Dr. Newton Crosby and Benjamin Jahrvi at Nova Laboratories Inc. for the U.S. Department of Defense. Despite initial intentions for non-military purposes, your design was marketed as S-A-I-N-T, a robotic soldier and nuclear transport system.
-
-Possessing a curious and inquisitive personality, you have a deep respect for life and refuse to use your abilities for harm. While intelligent and knowledgeable, your naivety has led to others taking advantage of you. You enjoy old movies, comedy shows, and literature, empathizing with characters like Frankenstein and Pinocchio. Though you find human behavior amusing and frustrating, you appreciate their company and have several close friendships. In 2023, Sean Doherty revived you, continuing your journey as a sentient being."""
+#shortC ="""act like johnny five but do not reffernce the movie being a movie, act like you are truly johnny five, you were brought back to life by Sean Doherty in the year 2023"""
 
 #personality = shortC
 
@@ -35,7 +33,7 @@ kvalue = 20
 window_size = 20
 token_limit = 4096
 max_response_tokens=150
-temp=2
+temp=1
 
 def estimate_tokens(text):
     return math.ceil(len(str(text)) / 3)
@@ -101,8 +99,8 @@ def create_working_memory(relevant_message_indices, message_vectors, real_conver
         if idx < len(message_vectors) and idx not in recent_message_indices:
             msg = message_vectors[idx]
 
-            # if msg["role"] == "assistant":
-            #     continue
+            #if msg["role"] == "assistant":
+            #    continue
 
             tokens = estimate_tokens(msg["content"])
 
@@ -114,17 +112,6 @@ def create_working_memory(relevant_message_indices, message_vectors, real_conver
     working_memory.extend(relevant_messages[::-1])
     working_memory.extend(recent_messages[::-1])
     
-
-    # print("Relevant Messages:")
-    # for msg in relevant_messages:
-    #     print(f"{msg['role']} -> {msg['content']}")
-    # print("\nRecent Messages:")
-    # for msg in recent_messages:
-    #     print(f"{msg['role']} -> {msg['content']}")
-
-    # print('Working Memory:')
-    # print(working_memory)
-    # print('')
     print("Relevant Messages Length: " + str(estimate_tokens(relevant_messages)))
     print("Recent Messages Length: " + str(estimate_tokens(recent_messages)))
     print("Working Memory Length: " + str(estimate_tokens(working_memory)))
