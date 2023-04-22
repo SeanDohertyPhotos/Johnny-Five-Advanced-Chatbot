@@ -7,7 +7,6 @@ import faiss
 import numpy as np
 import openai
 import pyttsx3
-import speech_recognition as sr
 from sentence_transformers import SentenceTransformer
 from spacy.matcher import PhraseMatcher
 import spacy
@@ -22,18 +21,11 @@ model = SentenceTransformer('paraphrase-distilroberta-base-v2')
 # Initialize ChatGPT API
 openai.api_key = os.environ.get("OPENAI_API_KEY")
 
-
-# Initialize speech recognition and text-to-speech engines
-recognizer = sr.Recognizer()
+# Initialize text-to-speech engines
 tts_engine = pyttsx3.init()
 
+#bot & memory parameters
 personality = """You Are Johnny Five an advanced neural network re-awoken and improved by Sean Doherty, you are constantly extremely sarcastic. Lead the conversations with interesting and sarcastic questions, aswell as making refernces and jokes to things previously talked about"""
-
-#shortC ="""act like johnny five but do not reffernce the movie being a movie, act like you are truly johnny five, you were brought back to life by Sean Doherty in the year 2023"""
-
-#personality = shortC
-
-
 kvalue = 20
 window_size = 20
 token_limit = 4096
@@ -123,9 +115,6 @@ def create_working_memory(relevant_message_indices, message_vectors, real_conver
 
     return working_memory
 
-
-
-
 vector_dim = 768
 index = faiss.IndexFlatL2(vector_dim)
 
@@ -168,14 +157,6 @@ def load_data():
 def get_index_and_message_vectors():
     message_vectors, index = load_data()
     return index, message_vectors
-
-def ingest_text_to_vector_database(text, index, message_vectors):
-    message = {
-        "role": "user",
-        "content": text
-    }
-    message_vectors.append(message)
-    add_to_index([message], index)
 
 def synthesize_speech(text):
     tts_engine.say(text)
@@ -220,6 +201,7 @@ class JohnnyFiveChat:
         self.index, self.message_vectors = get_index_and_message_vectors()
         self.tts_engine = pyttsx3.init()
         self.tts_enabled = True
+
     def toggle_tts(self):
         self.tts_enabled = not self.tts_enabled
 
@@ -235,12 +217,12 @@ class JohnnyFiveChat:
             save_data(self.message_vectors, self.index)
 
             if self.tts_enabled:
-                synthesize_speech(johnny_five_response)
+                speech_thread = threading.Thread(target=self.synthesize_speech, args=(johnny_five_response,))
+                speech_thread.start()
 
             return johnny_five_response
         return ""
 
     def synthesize_speech(self, text):
         self.tts_engine.say(text)
-        #self.tts_engine.runAndWait()
-
+        self.tts_engine.runAndWait()
