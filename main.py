@@ -11,12 +11,17 @@ import speech_recognition as sr
 from sentence_transformers import SentenceTransformer
 from spacy.matcher import PhraseMatcher
 import spacy
+from dotenv import load_dotenv
+
+load_dotenv()
+
 
 nlp = spacy.load("en_core_web_sm")
 model = SentenceTransformer('paraphrase-distilroberta-base-v2')
 
 # Initialize ChatGPT API
-openai.api_key = "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"
+openai.api_key = os.environ.get("OPENAI_API_KEY")
+
 
 # Initialize speech recognition and text-to-speech engines
 recognizer = sr.Recognizer()
@@ -214,8 +219,7 @@ class JohnnyFiveChat:
     def __init__(self):
         self.index, self.message_vectors = get_index_and_message_vectors()
         self.tts_engine = pyttsx3.init()
-        self.tts_enabled = False
-
+        self.tts_enabled = True
     def toggle_tts(self):
         self.tts_enabled = not self.tts_enabled
 
