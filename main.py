@@ -177,34 +177,37 @@ def synthesize_speech(text):
     tts_engine.runAndWait()
 
 def chat_with_johnny_five(user_input, index, message_vectors):
-    real_conversation_history = load_real_conversation_history()
+    if estimate_tokens(user_input) < 3000 :
+        real_conversation_history = load_real_conversation_history()
 
-    # Create the user_input_vector using the embed_text function
-    user_input_vector = embed_text(user_input)
+        # Create the user_input_vector using the embed_text function
+        user_input_vector = embed_text(user_input)
 
-    relevant_message_indices = get_relevant_message_indices(user_input_vector, index, kvalue, message_vectors, window_size, user_input)
-    working_memory = create_working_memory(relevant_message_indices, message_vectors, real_conversation_history, recent_tokens_limit, relevant_tokens_limit)
-    working_memory.append({"role": "user", "content": user_input})
+        relevant_message_indices = get_relevant_message_indices(user_input_vector, index, kvalue, message_vectors, window_size, user_input)
+        working_memory = create_working_memory(relevant_message_indices, message_vectors, real_conversation_history, recent_tokens_limit-estimate_tokens(user_input)/2, relevant_tokens_limit-estimate_tokens(user_input)/2)
+        working_memory.append({"role": "user", "content": user_input})
 
-    print("working memory")
-    for msg in working_memory:
-        print(f"{msg['role']} -> {msg['content']}")
+        print("working memory")
+        for msg in working_memory:
+            print(f"{msg['role']} -> {msg['content']}")
 
-    response = openai.ChatCompletion.create(
-        model="gpt-3.5-turbo",
-        messages=working_memory,
-        max_tokens=max_response_tokens,
-        temperature=temp,
-    )
+        response = openai.ChatCompletion.create(
+            model="gpt-3.5-turbo",
+            messages=working_memory,
+            max_tokens=max_response_tokens,
+            temperature=temp,
+        )
 
-    response_text = response.choices[0].message.content.strip()
+        response_text = response.choices[0].message.content.strip()
 
-    # Update real_conversation_history and save it
-    real_conversation_history.append({"role": "user", "content": user_input})
-    real_conversation_history.append({"role": "assistant", "content": response_text})
-    save_real_conversation_history(real_conversation_history)
+        # Update real_conversation_history and save it
+        real_conversation_history.append({"role": "user", "content": user_input})
+        real_conversation_history.append({"role": "assistant", "content": response_text})
+        save_real_conversation_history(real_conversation_history)
 
-    return response_text
+        return response_text
+    else:
+        return "Input too long, contains: " + str(estimate_tokens(user_input)) + " tokens, max is 3,000"
 
 
 class JohnnyFiveChat:
