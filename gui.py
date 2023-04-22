@@ -7,7 +7,7 @@ class JohnnyFiveApp(tk.Tk):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self.title("Johnny Five Chat")
-        self.geometry("800x1200")
+        self.geometry("1200x800")
 
         # Set dark theme colors
         self.configure(bg="#282828")
